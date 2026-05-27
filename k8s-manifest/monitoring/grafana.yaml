@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+# KSA that completes the Workload Identity link from 3A
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana
+  namespace: monitoring
+  annotations:
+    iam.gke.io/gcp-service-account: grafana-monitoring@${PROJECT_ID}.iam.gserviceaccount.com
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: grafana-admin
+  namespace: monitoring
+spec:
+  provider: gke      # GKE-managed driver (not the upstream "gcp" provider)
+  parameters:
+    secrets: |
+      - resourceName: "projects/${PROJECT_ID}/secrets/grafana-password/versions/latest"
+        path: "admin-password"
+---
+# Pre-provision the Cloud Monitoring datasource (no clicking in the UI)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: Cloud Monitoring
+      type: stackdriver
+      access: proxy
+      isDefault: true
+      jsonData:
+        authenticationType: gce      
+        defaultProject: ${PROJECT_ID}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: grafana }
+  template:
+    metadata:
+      labels: { app: grafana }
+    spec:
+      serviceAccountName: grafana       # runs as the WI-bound KSA
+      containers:
+      - name: grafana
+        image: grafana/grafana:11.3.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          value: admin
+        # Grafana reads any setting from a file via the __FILE suffix.
+        # Points at the CSI-mounted secret file (no K8s Secret needed).
+        - name: GF_SECURITY_ADMIN_PASSWORD__FILE
+          value: /mnt/secrets-store/admin-password
+        volumeMounts:
+        - name: datasources
+          mountPath: /etc/grafana/provisioning/datasources
+        - name: secrets-store               # mounts the secret as a file
+          mountPath: /mnt/secrets-store
+          readOnly: true
+        resources:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits:   { cpu: 500m, memory: 512Mi }
+      volumes:
+      - name: datasources
+        configMap:
+          name: grafana-datasources
+      - name: secrets-store
+        csi:
+          driver: secrets-store-gke.csi.k8s.io   # the GKE-managed driver (matches `kubectl get csidriver`)
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: grafana-admin
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  selector: { app: grafana }
+  ports:
+  - port: 3000
+    targetPort: 3000

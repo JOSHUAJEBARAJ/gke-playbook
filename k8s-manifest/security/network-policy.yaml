@@ -1,0 +1,192 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: app
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# frontend: hit by loadgenerator AND the GCE load balancer / health checks (NEG).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: frontend }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels: { app: loadgenerator }
+    - ipBlock: { cidr: 130.211.0.0/22 }   # GCLB health-check range
+    - ipBlock: { cidr: 35.191.0.0/16 }     # GCLB health-check range
+    ports:
+    - { protocol: TCP, port: 8080 }
+---
+# productcatalogservice: frontend, checkout, recommendation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-productcatalog
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: productcatalogservice }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: frontend } }
+    - podSelector: { matchLabels: { app: checkoutservice } }
+    - podSelector: { matchLabels: { app: recommendationservice } }
+    ports:
+    - { protocol: TCP, port: 3550 }
+---
+# currencyservice: frontend, checkout
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-currency
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: currencyservice }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: frontend } }
+    - podSelector: { matchLabels: { app: checkoutservice } }
+    ports:
+    - { protocol: TCP, port: 7000 }
+---
+# cartservice: frontend, checkout
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cart
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: cartservice }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: frontend } }
+    - podSelector: { matchLabels: { app: checkoutservice } }
+    ports:
+    - { protocol: TCP, port: 7070 }
+---
+# recommendationservice: frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-recommendation
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: recommendationservice }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: frontend } }
+    ports:
+    - { protocol: TCP, port: 8080 }
+---
+# shippingservice: frontend, checkout
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-shipping
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: shippingservice }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: frontend } }
+    - podSelector: { matchLabels: { app: checkoutservice } }
+    ports:
+    - { protocol: TCP, port: 50051 }
+---
+# checkoutservice: frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-checkout
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: checkoutservice }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: frontend } }
+    ports:
+    - { protocol: TCP, port: 5050 }
+---
+# adservice: frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ad
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: adservice }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: frontend } }
+    ports:
+    - { protocol: TCP, port: 9555 }
+---
+# paymentservice: checkout
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-payment
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: paymentservice }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: checkoutservice } }
+    ports:
+    - { protocol: TCP, port: 50051 }
+---
+# emailservice: checkout. NOTE port 8080 = the POD port; the Service remaps 5000 -> 8080.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-email
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: emailservice }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: checkoutservice } }
+    ports:
+    - { protocol: TCP, port: 8080 }
+---
+# redis-cart: cartservice
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis
+  namespace: app
+spec:
+  podSelector:
+    matchLabels: { app: redis-cart }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { app: cartservice } }
+    ports:
+    - { protocol: TCP, port: 6379 }

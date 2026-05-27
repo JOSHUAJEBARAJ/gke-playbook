@@ -1,0 +1,19 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:                          # ← this line was missing
+  name: disallow-latest-tag
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: validate-image-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Using ':latest' or an untagged image is not allowed; pin an explicit tag."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest" # here ! means the not the latest tag 

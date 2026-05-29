@@ -1,0 +1,19 @@
+# Copy this file to terraform.tfvars and fill in your own values.
+# terraform.tfvars is gitignored, so your real values stay local.
+
+# GCP project to deploy into (required).
+project_id = "my-gcp-project-id"
+
+# Restrict the cluster's public API endpoint to specific IPs.
+# Leave as [] to allow access from anywhere (0.0.0.0/0).
+# Use a /32 to lock it down to a single machine.
+authorized_networks = [
+  {
+    cidr_block   = "203.0.113.10/32"
+    display_name = "my-laptop"
+  }
+]
+
+# Optional overrides (defaults shown in variables.tf):
+# region       = "us-central1"
+# cluster_name = "gke-test"

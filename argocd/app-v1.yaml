@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: onlineboutique
+  namespace: argocd            # the Application object lives in argocd, not app
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/JOSHUAJEBARAJ/gke-playbook.git
+    targetRevision: main
+    path: k8s-manifest/app     # the folder Argo CD reconciles
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: app             # where the workloads land
+  syncPolicy:
+    automated:
+      prune: true              # delete resources removed from Git (e.g. the old Deployment in step 5)
+      selfHeal: true           # revert out-of-band kubectl changes back to Git
+    syncOptions:
+      - CreateNamespace=true   # creates 'app' if it isn't there
